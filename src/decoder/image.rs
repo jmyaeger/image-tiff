@@ -253,6 +253,26 @@ impl Image {
             return Err(TiffUnsupportedError::InconsistentBitsPerSample(bits_per_sample).into());
         }
 
+        if photometric_interpretation == PhotometricInterpretation::RGBPalette {
+            match tag_reader.find_tag(Tag::ColorMap)? {
+                Some(val) => {
+                    let map = val.into_u16_vec()?;
+                    let expected_len = 3 * (1usize << bits_per_sample[0]);
+                    if map.len() != expected_len {
+                        return Err(TiffError::FormatError(TiffFormatError::InvalidCountForTag(
+                            Tag::ColorMap,
+                            map.len(),
+                        )));
+                    }
+                }
+                None => {
+                    return Err(TiffError::FormatError(
+                        TiffFormatError::RequiredTagNotFound(Tag::ColorMap),
+                    ))
+                }
+            }
+        }
+
         let predictor = tag_reader
             .find_tag(Tag::Predictor)?
             .map(Value::into_u16)
@@ -515,14 +535,23 @@ impl Image {
                     vec![self.bits_per_sample; self.samples as usize],
                 ),
             )),
-            PhotometricInterpretation::RGBPalette | PhotometricInterpretation::TransparencyMask => {
-                Err(TiffError::UnsupportedError(
+            PhotometricInterpretation::RGBPalette => match self.photometric_samples {
+                1 if matches!(self.sample_format, SampleFormat::Uint) => {
+                    Ok(ColorType::Palette(self.bits_per_sample))
+                }
+                _ => Err(TiffError::UnsupportedError(
                     TiffUnsupportedError::InterpretationWithBits(
                         self.photometric_interpretation,
                         vec![self.bits_per_sample; self.samples as usize],
                     ),
-                ))
-            }
+                )),
+            },
+            PhotometricInterpretation::TransparencyMask => Err(TiffError::UnsupportedError(
+                TiffUnsupportedError::InterpretationWithBits(
+                    self.photometric_interpretation,
+                    vec![self.bits_per_sample; self.samples as usize],
+                ),
+            )),
         }
     }
 
@@ -844,19 +873,25 @@ impl Image {
             | ColorType::Multiband {
                 bit_depth: n,
                 num_samples: _,
-            } if n < 8 => match self.predictor {
-                Predictor::None => {}
-                Predictor::Horizontal => {
-                    return Err(TiffError::UnsupportedError(
-                        TiffUnsupportedError::HorizontalPredictor(color_type),
-                    ));
+            }
+            | ColorType::Palette(n)
+                if n < 8 =>
+            {
+                match self.predictor {
+                    Predictor::None => {}
+                    Predictor::Horizontal => {
+                        return Err(TiffError::UnsupportedError(
+                            TiffUnsupportedError::HorizontalPredictor(color_type),
+                        ));
+                    }
+                    Predictor::FloatingPoint => {
+                        return Err(TiffError::UnsupportedError(
+                            TiffUnsupportedError::FloatingPointPredictor(color_type),
+                        ));
+                    }
                 }
-                Predictor::FloatingPoint => {
-                    return Err(TiffError::UnsupportedError(
-                        TiffUnsupportedError::FloatingPointPredictor(color_type),
-                    ));
-                }
-            },
+            }
+            ColorType::Palette(n) if n == 8 || n == 16 => {}
             type_ => {
                 return Err(TiffError::UnsupportedError(
                     TiffUnsupportedError::UnsupportedColorType(type_),

@@ -55,6 +55,34 @@ fn test_image_color_type_unsupported(file: &str, expected_type: ColorType) {
 }
 
 #[test]
+fn test_palette_u8_1b() {
+    test_image_sum_u8("palette-1c-1b.tiff", ColorType::Palette(1), 379313);
+}
+
+#[test]
+fn test_palette_u8_4b() {
+    test_image_sum_u8("palette-1c-4b.tiff", ColorType::Palette(4), 1480490);
+}
+
+#[test]
+fn test_palette_u8_8b() {
+    test_image_sum_u8("palette-1c-8b.tiff", ColorType::Palette(8), 2876948);
+}
+
+#[test]
+fn test_palette_colormap() {
+    let path = PathBuf::from(TEST_IMAGE_DIR).join("palette-1c-8b.tiff");
+    let img_file = File::open(path).expect("Cannot find test image");
+    let mut decoder = Decoder::new(img_file).expect("Cannot create decoder");
+    assert_eq!(decoder.colortype().unwrap(), ColorType::Palette(8));
+
+    let color_map = decoder
+        .get_tag_u16_vec(tiff::tags::Tag::ColorMap)
+        .expect("ColorMap tag should be present");
+    assert_eq!(color_map.len(), 3 * 256);
+}
+
+#[test]
 fn test_cmyk_u8() {
     test_image_sum_u8("cmyk-3c-8b.tiff", ColorType::CMYK(8), 8522658);
 }

@@ -21,7 +21,7 @@ This table lists photometric interpretations and sample formats which are suppor
 | `WhiteIsZero`               | Gray(8\|16\|32\|64)                     | Gray(32\|64)              |
 | `BlackIsZero`               | Gray(8\|16\|32\|64)                     | Gray(32\|64)              |
 | `RGB`                       | RGB(8\|16\|32\|64), RGBA(8\|16\|32\|64) | RGB(32\|64), RGBA(32\|64) |
-| `RGBPalette`                |                                         |                           |
+| `RGBPalette`                | Palette(1\|4\|8\|16)                    |                           |
 | `Mask`                      |                                         |                           |
 | `CMYK`                      | CMYK(8\|16\|32\|64)                     | CMYK(32\|64)              |
 | `CMYKA`                     | CMYKA(8)                                |                           |
