@@ -379,6 +379,47 @@ fn test_ycbcr_u8_roundtrip() {
     test_u8_roundtrip::<colortype::YCbCr8>("tiled-jpeg-ycbcr.tif", ColorType::YCbCr(8));
 }
 
+#[test]
+fn test_palette_u8_roundtrip() {
+    // The macro is not currently compatible with adding a color map (would require changing the signature
+    // of `write_image()`)
+    let path = PathBuf::from("./tests/images/").join("palette-1c-8b.tiff");
+    let img_file = File::open(path).expect("Cannot find test image!");
+    let mut decoder = Decoder::new(img_file).expect("Cannot create decoder");
+    assert_eq!(decoder.colortype().unwrap(), ColorType::Palette(8));
+
+    let (width, height) = decoder.dimensions().unwrap();
+    let original_map = decoder.get_tag_u16_vec(Tag::ColorMap).unwrap();
+    let image_data = match decoder.read_image().unwrap() {
+        DecodingResult::U8(data) => data,
+        _ => panic!("Wrong data type"),
+    };
+
+    let mut file = Cursor::new(Vec::new());
+    {
+        let mut tiff = TiffEncoder::new(&mut file).unwrap();
+        let mut image = tiff
+            .new_image::<colortype::Palette8>(width, height)
+            .unwrap();
+        image.color_map(&original_map).unwrap();
+        image.write_data(&image_data).unwrap();
+    }
+    file.seek(SeekFrom::Start(0)).unwrap();
+    {
+        let mut decoder = Decoder::new(&mut file).unwrap();
+        assert_eq!(decoder.colortype().unwrap(), ColorType::Palette(8));
+        assert_eq!(decoder.dimensions().unwrap(), (width, height));
+
+        let roundtrip_map = decoder.get_tag_u16_vec(Tag::ColorMap).unwrap();
+        assert_eq!(roundtrip_map, original_map);
+
+        match decoder.read_image().unwrap() {
+            DecodingResult::U8(data) => assert_eq!(data, image_data),
+            _ => panic!("Wrong data type"),
+        }
+    }
+}
+
 trait AssertDecode {
     fn assert_tag_u32(&mut self, tag: u16) -> u32;
     fn assert_tag_u32_vec(&mut self, tag: u16) -> Vec<u32>;

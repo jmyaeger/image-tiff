@@ -736,6 +736,34 @@ impl<'a, W: 'a + Write + Seek, T: ColorType, K: TiffKind> ImageEncoder<'a, W, T,
         Ok(())
     }
 
+    /// Set the color map for palette color images.
+    ///
+    /// The `map` slice must contain `3 * 2^BitsPerSample` entries (e.g., 768
+    /// entries for 8-bit palette images) laid out as all red values, then all
+    /// green values, then all blue values.
+    ///
+    /// This function needs to be called before any calls to `write_data` or
+    /// `write_strip` and will return an error otherwise.
+    pub fn color_map(&mut self, map: &[u16]) -> TiffResult<()> {
+        if self.strip_idx != 0 {
+            return Err(TiffError::UsageError(
+                UsageError::ReconfiguredAfterImageWrite,
+            ));
+        }
+
+        let expected_len = 3 * (1usize << T::BITS_PER_SAMPLE[0]);
+        if map.len() != expected_len {
+            return Err(TiffError::FormatError(TiffFormatError::InvalidCountForTag(
+                Tag::ColorMap,
+                map.len(),
+            )));
+        }
+
+        self.encoder.write_tag(Tag::ColorMap, map)?;
+
+        Ok(())
+    }
+
     /// Number of samples the next strip should have.
     pub fn next_strip_sample_count(&self) -> u64 {
         if self.strip_idx >= self.strip_count {
@@ -873,6 +901,14 @@ impl<'a, W: 'a + Write + Seek, T: ColorType, K: TiffKind> ImageEncoder<'a, W, T,
     }
 
     fn finish_internal(&mut self) -> TiffResult<DirectoryOffset<K>> {
+        if T::TIFF_VALUE == PhotometricInterpretation::RGBPalette
+            && !self.encoder.directory.contains(Tag::ColorMap)
+        {
+            return Err(TiffError::FormatError(
+                TiffFormatError::RequiredTagNotFound(Tag::ColorMap),
+            ));
+        }
+
         if self.extra_samples.is_empty() {
             self.encoder
                 .write_tag(Tag::BitsPerSample, <T>::BITS_PER_SAMPLE)?;

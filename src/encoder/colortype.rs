@@ -351,3 +351,13 @@ impl ColorType for CMYKA8 {
 
     integer_horizontal_predict!();
 }
+
+pub struct Palette8;
+impl ColorType for Palette8 {
+    type Inner = u8;
+    const TIFF_VALUE: PhotometricInterpretation = PhotometricInterpretation::RGBPalette;
+    const BITS_PER_SAMPLE: &'static [u16] = &[8];
+    const SAMPLE_FORMAT: &'static [SampleFormat] = &[SampleFormat::Uint];
+
+    integer_horizontal_predict!();
+}

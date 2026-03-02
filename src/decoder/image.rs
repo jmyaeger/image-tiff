@@ -257,7 +257,15 @@ impl Image {
             match tag_reader.find_tag(Tag::ColorMap)? {
                 Some(val) => {
                     let map = val.into_u16_vec()?;
-                    let expected_len = 3 * (1usize << bits_per_sample[0]);
+                    let depth = bits_per_sample[0];
+                    let entries_per_channel = 1usize
+                        .checked_shl(u32::from(depth))
+                        .ok_or(TiffError::UnsupportedError(
+                            TiffUnsupportedError::UnsupportedSampleDepth(depth),
+                        ))?;
+                    let expected_len = 3usize
+                        .checked_mul(entries_per_channel)
+                        .ok_or(TiffError::LimitsExceeded)?;
                     if map.len() != expected_len {
                         return Err(TiffError::FormatError(TiffFormatError::InvalidCountForTag(
                             Tag::ColorMap,
